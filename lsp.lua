@@ -20,6 +20,14 @@ local lsp = {Server = {}, }
 
 
 
+
+
+
+
+
+
+lsp.null = json.null
+
 function lsp.Server.new(lang, pathname, args)
    local self = {}
 
@@ -61,6 +69,7 @@ function lsp.Server.new(lang, pathname, args)
    self.stderr = stderr_r
    self.pid = pid
    self.msgid = 1
+   self.queue = {}
 
    return setmetatable(self, { __index = lsp.Server })
 end
@@ -106,6 +115,8 @@ local function recv_until(self, id)
       local r = self:recv()
       if r.id == id then
          return r
+      else
+         table.insert(self.queue, r)
       end
    end
 end
@@ -115,10 +126,17 @@ function lsp.Server:initialize(params)
    if not params.rootUri then
       params.rootUri = json.null
    end
-   local i = self:send({ method = "initialize", params = params })
-   recv_until(self, i)
-   i = self:send({ method = "initialized", params = {} })
-   recv_until(self, i)
+   self:method("initialize", params)
+   self:method("initialized", {})
+end
+
+function lsp.Server:method(method, params)
+   local i = self:send({ method = method, params = params })
+   return recv_until(self, i)
+end
+
+function lsp.Server:pop()
+   return table.remove(self.queue)
 end
 
 function lsp.Server:done()
